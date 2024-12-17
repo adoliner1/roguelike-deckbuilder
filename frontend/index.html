@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Roguelike Deckbuilder</title>
+    <style>
+        .game-container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            grid-template-rows: repeat(8, 50px);
+            gap: 1px;
+            background-color: #ccc;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: white;
+            border: 1px solid #999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .player {
+            background-color: blue;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+        }
+        .enemy {
+            background-color: red;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+        }
+        .hand {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .card {
+            width: 100px;
+            height: 150px;
+            border: 1px solid #000;
+            padding: 10px;
+            cursor: pointer;
+            background-color: white;
+        }
+        .card.selected {
+            border: 2px solid blue;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div>
+            <div id="grid" class="grid"></div>
+            <div id="hand" class="hand"></div>
+        </div>
+        <div id="stats">
+            <h3>Player HP: <span id="playerHp">10/10</span></h3>
+            <h3>Cards in Deck: <span id="deckCount">10</span></h3>
+            <button id="playCards">Play Selected Cards</button>
+        </div>
+    </div>
+
+    <script>
+        let gameState = null;
+        let selectedCards = [];
+
+        async function startGame() {
+            const response = await fetch('/start-game', {
+                method: 'POST'
+            });
+            gameState = await response.json();
+            updateGameDisplay();
+        }
+
+        function updateGameDisplay() {
+            // Update grid
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            for (let y = 0; y < gameState.grid_size; y++) {
+                for (let x = 0; x < gameState.grid_size; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    
+                    // Add player or enemy if present
+                    if (gameState.player.position.x === x && gameState.player.position.y === y) {
+                        const player = document.createElement('div');
+                        player.className = 'player';
+                        cell.appendChild(player);
+                    }
+                    
+                    for (const enemy of gameState.enemies) {
+                        if (enemy.position.x === x && enemy.position.y === y) {
+                            const enemyDiv = document.createElement('div');
+                            enemyDiv.className = 'enemy';
+                            cell.appendChild(enemyDiv);
+                        }
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            }
+
+            // Update hand
+            const hand = document.getElementById('hand');
+            hand.innerHTML = '';
+            gameState.current_hand.forEach((card, index) => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'card';
+                cardDiv.innerHTML = `
+                    <h3>${card.name}</h3>
+                    <p>${card.description}</p>
+                `;
+                cardDiv.onclick = () => toggleCardSelection(index);
+                hand.appendChild(cardDiv);
+            });
+
+            // Update stats
+            document.getElementById('playerHp').textContent = 
+                `${gameState.player.hp}/${gameState.player.max_hp}`;
+            document.getElementById('deckCount').textContent = gameState.deck.length;
+        }
+
+        function toggleCardSelection(index) {
+            const idx = selectedCards.indexOf(index);
+            if (idx === -1) {
+                if (selectedCards.length < 3) {
+                    selectedCards.push(index);
+                }
+            } else {
+                selectedCards.splice(idx, 1);
+            }
+            
+            // Update visual selection
+            document.querySelectorAll('.card').forEach((card, i) => {
+                card.classList.toggle('selected', selectedCards.includes(i));
+            });
+        }
+
+        async function playCards() {
+            if (selectedCards.length === 0) return;
+            
+            const response = await fetch('/play-cards', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(selectedCards)
+            });
+            
+            gameState = await response.json();
+            selectedCards = [];
+            updateGameDisplay();
+        }
+
+        document.getElementById('playCards').onclick = playCards;
+        startGame();
+    </script>
+</body>
+</html>
